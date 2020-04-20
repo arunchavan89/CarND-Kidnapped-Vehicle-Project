@@ -36,12 +36,14 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
     {
         /*Initialize all 1000 particles to first position*/
         Particle temp_particle;
+        temp_particle.id = i;
         temp_particle.x = x + std[0];
         temp_particle.y = y + std[1];
         temp_particle.theta = theta + std[2];
         temp_particle.weight = 1.0;
 
         particles.push_back(temp_particle);
+        weights.push_back(temp_particle.weight);
     }
 
     /* Set the initialization flag to TRUE*/
@@ -51,12 +53,13 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate)
 {
     /**
-     * TODO: Add measurements to each particle and add random Gaussian noise.
+     * Add measurements to each particle and add random Gaussian noise.
      * NOTE: When adding noise you may find std::normal_distribution
      *   and std::default_random_engine useful.
      *  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
      *  http://www.cplusplus.com/reference/random/default_random_engine/
      */
+
     std::random_device rd{};
     std::mt19937 gen{ rd() };
     std::normal_distribution<float>d1(0, std_pos[0]);
@@ -71,20 +74,20 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     {
         if (yaw_rate > 0.0001) /* Avoid division by zero. */
         {
-            /* Update distances: new distance = previous distance + velocity / yaw_rate *  {sin OR cos} + noise */
+            /* Update distances: https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
             particles[i].x = particles[i].x + (velocity / yaw_rate)  * (sin(particles[i].theta + (yaw_rate * delta_t)) - sin(particles[i].theta)) + temp_noise_x;
             particles[i].y = particles[i].y + (velocity / yaw_rate)  * (cos(particles[i].theta) - cos(particles[i].theta + (yaw_rate * delta_t))) + temp_noise_y;
 
-            /* Update orientation: new orientation = previous orientation + change in orientation x time difference + noise */
+            /* Update orientation */
             particles[i].theta = particles[i].theta + yaw_rate * delta_t + temp_noise_theta;
         }
         else
         {
-            /* Update distances: new distance = previous distance + {cos OR sin} x velocity x time difference + noise */
+            /* Update distances */
             particles[i].x = particles[i].x + cos(yaw_rate) * (velocity * delta_t) + temp_noise_x;
             particles[i].y = particles[i].y + sin(yaw_rate) * (velocity * delta_t) + temp_noise_y;
 
-            /* Update orientation: new orientation = previous orientation + noise */
+            /* Update orientation */
             particles[i].theta = particles[i].theta + temp_noise_theta;
         }
     }
@@ -94,7 +97,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, vector<LandmarkObs>& observations)
 {
     /**
-     * TODO: Find the predicted measurement that is closest to each
+     * Find the predicted measurement that is closest to each
      *   observed measurement and assign the observed measurement to this
      *   particular landmark.
      * NOTE: this method will NOT be called by the grading code. But you will
@@ -109,7 +112,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     const Map &map_landmarks)
 {
     /**
-     * TODO: Update the weights of each particle using a mult-variate Gaussian
+     * Update the weights of each particle using a mult-variate Gaussian
      *   distribution. You can read more about this distribution here:
      *   https://en.wikipedia.org/wiki/Multivariate_normal_distribution
      * NOTE: The observations are given in the VEHICLE'S coordinate system.
@@ -122,17 +125,54 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
      *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
      */
 
+    for (int i = 0; i < particles.size(); ++i)
+    {
+        Particle particle = particles[i];
+        double prob = 1.0;
+
+        for (int j = 0; j < observations.size(); j++)
+        {
+            /* Homogenous Transformation https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
+            double trans_x = particle.x + (cos(particle.theta) * observations[j].x) - (sin(particle.theta) * observations[j].y);
+            double trans_y = particle.y + (sin(particle.theta) * observations[j].x) + (cos(particle.theta) * observations[j].y);
+
+            for (int k = 0; k < map_landmarks.landmark_list.size(); k++)
+            {
+                /* Calculate distance between particle and landmarks */
+                double distance = dist(trans_x, trans_y, map_landmarks.landmark_list[k].x_f, map_landmarks.landmark_list[k].y_f);
+                if (distance <= sensor_range)
+                {
+                    prob *= calculate_multvariate_normal_distribution(std_landmark[0], std_landmark[1], trans_x, trans_y, map_landmarks.landmark_list[k].x_f, map_landmarks.landmark_list[k].y_f);
+                }
+            }
+
+        }
+        particles[i].weight = prob;
+        weights[i] = prob;
+    }
 }
 
 void ParticleFilter::resample()
 {
     /**
-     * TODO: Resample particles with replacement with probability proportional
+     * Resample particles with replacement with probability proportional
      *   to their weight.
      * NOTE: You may find std::discrete_distribution helpful here.
      *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
      */
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<> discrete_weights(weights.begin(), weights.end());
 
+    std::vector<Particle>resampled_weights;
+    for (int i = 0; i < num_particles; i++)
+    {
+        Particle particle;
+        particle = particles[discrete_weights(gen)];
+        resampled_weights.push_back(particle);
+    }
+
+    particles = resampled_weights;
 }
 
 void ParticleFilter::SetAssociations(Particle& particle,
@@ -178,4 +218,19 @@ string ParticleFilter::getSenseCoord(Particle best, string coord)
     string s = ss.str();
     s = s.substr(0, s.length() - 1);  // get rid of the trailing space
     return s;
+}
+
+double ParticleFilter::calculate_multvariate_normal_distribution(double std_landmark_x, double std_landmark_y,
+    double observation_x, double observation_y, double map_x, double map_y)
+{
+    /* Multivariate Gaussian probability density: https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
+
+    double result = 0.0;
+    double term1 = 1 / (2 * M_PI * std_landmark_x *  std_landmark_y);
+    double term2 = (observation_x - map_x) * (observation_x - map_x) / 2 * pow(std_landmark_x, 2.0);
+    double term3 = (observation_y - map_y) * (observation_y - map_y) / 2 * pow(std_landmark_y, 2.0);
+    double exponent_value = exp(-(term2 + term3));
+    result = term1 * exponent_value;
+    return result;
+
 }

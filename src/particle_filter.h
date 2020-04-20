@@ -98,9 +98,22 @@ public:
         const std::vector<double>& sense_y);
 
     /**
+     * Multivariate Gaussian probability density function
+     * @param  std_landmark_x : standard deviation in landmark x - measurement
+     * @param  std_landmark_y : standard deviation in landmark y - measurement
+     * @param  observation_x  : x measurement observation
+     * @param  observation_y  : y measurement observation
+     * @param  map_x          : x measurement map
+     * @param  map_y          : y measurement map
+     * @ returns result
+    */
+    double calculate_multvariate_normal_distribution(double std_landmark_x, double std_landmark_y,
+        double observation_x, double observation_y, double map_x, double map_y);
+
+    /**
      * initialized Returns whether particle filter is initialized yet or not.
      */
-    const bool initialized() const 
+    const bool initialized() const
     {
         return is_initialized;
     }
