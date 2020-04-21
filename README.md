@@ -5,7 +5,7 @@
 [image2]: ./results/algo.png "algo Image"
 [image3]: ./results/example_trasfor.png "example_trasfor Image"
 [image4]: ./results/formula_1.png "formula_1 Image"
-[image5]: ./results/homo_transformation.png "homo_transformation Image"
+[image5]: ./results/homo_transformation.PNG "homo_transformation Image"
 [image6]: ./results/multivariate_gaus.png "multivariate_gaus Image"
 
 This repository contains C++ code for implementation of Particle Filter to localize a vehicle kidnapped in a closed environment. 
