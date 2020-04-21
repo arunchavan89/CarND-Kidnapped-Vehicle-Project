@@ -108,14 +108,6 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, vector<Landm
 
 }
 
-double calculateLikelihood(double x, double ux, double y, double uy, double sig_x, double sig_y) {
-    double gauss_norm = 1 / (2 * M_PI * sig_x * sig_y);
-    double exponent = ((x - ux) * (x - ux) / (2.0 * sig_x * sig_x)) + ((y - uy) * (y - uy) / (2.0 * sig_y * sig_y));
-    double likelihood = gauss_norm * exp(-exponent);
-    return likelihood;
-}
-
-
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     const vector<LandmarkObs> &observations,
     const Map &map_landmarks)
@@ -134,43 +126,39 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
      *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
      */
 
-    for (int i = 0; i < num_particles; i++) {
-        Particle &p = particles[i];
-        double prob = 1;
-        for (int j = 0; j < observations.size(); j++) {
+    for (int i = 0; i < particles.size(); ++i)
+    {
+        Particle particle = particles[i];
+        double prob = 1.0;
 
-            double obj_x = observations[j].x;
-            double obj_y = observations[j].y;
+        for (int j = 0; j < observations.size(); j++)
+        {
+            /* Homogenous Transformation https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
+            double trans_x = particle.x + (cos(particle.theta) * observations[j].x) - (sin(particle.theta) * observations[j].y);
+            double trans_y = particle.y + (sin(particle.theta) * observations[j].x) + (cos(particle.theta) * observations[j].y);
 
-            // Transformation from particle coordinate to Map coordinate system
-            double trans_x = p.x + cos(p.theta) * obj_x - sin(p.theta) * obj_y;
-            double trans_y = p.y + sin(p.theta) * obj_x + cos(p.theta) * obj_y;
-
-            vector<Map::single_landmark_s> landmarks = map_landmarks.landmark_list;
-            double min_dist = 1000000;
-            double land_x = -1;
-            double land_y = -1;
-
-            for (int k = 0; k < landmarks.size(); k++) {
-                double act_x = landmarks[k].x_f;
-                double act_y = landmarks[k].y_f;
-                double dist = sqrt((act_x - trans_x) * (act_x - trans_x) + (act_y - trans_y) * (act_y - trans_y));
-
-                if (dist < min_dist && dist <= sensor_range) {
-                    min_dist = dist;
-                    land_x = act_x;
-                    land_y = act_y;
+            std::vector<Map::single_landmark_s> landmark_list = map_landmarks.landmark_list;
+            double land_x;
+            double land_y;
+            double max_val = 2 * sensor_range;
+            for (int k = 0; k < landmark_list.size(); k++)
+            {
+                /* Calculate distance between particle and landmarks */
+                double local_land_x = landmark_list[k].x_f;
+                double local_land_y = landmark_list[k].y_f;
+                double distance = dist(trans_x, trans_y, local_land_x, local_land_y);
+                if ((distance <= sensor_range) && (distance <= max_val))
+                {
+                    land_x = local_land_x;
+                    land_y = local_land_y;
+                    max_val = distance;
                 }
             }
+            prob *= calculate_multvariate_normal_distribution(std_landmark[0], std_landmark[1], trans_x, trans_y, land_x, land_y);
 
-            // calculate likelihood using 2D - gaussian distribution
-            // https://stackoverflow.com/questions/41538095/evaluate-multivariate-normal-gaussian-density-in-c
-            double likelihood = calculateLikelihood(land_x, trans_x, land_y, trans_y, std_landmark[0], std_landmark[1]);
-            prob *= likelihood;
         }
-        p.weight = prob;
+        particles[i].weight = prob;
         weights[i] = prob;
-
     }
 }
 
@@ -186,7 +174,8 @@ void ParticleFilter::resample()
     std::discrete_distribution<> d(weights.begin(), weights.end());
     std::vector<Particle> resampled_particles;
 
-    for (int n = 0; n < num_particles; ++n) {
+    for (int n = 0; n < num_particles; ++n) 
+    {
         Particle particle = particles[d(gen)];
         resampled_particles.push_back(particle);
     }
@@ -245,8 +234,8 @@ double ParticleFilter::calculate_multvariate_normal_distribution(double std_land
 
     double result = 0.0;
     double term1 = 1 / (2 * M_PI * std_landmark_x *  std_landmark_y);
-    double term2 = (observation_x - map_x) * (observation_x - map_x) / 2 * pow(std_landmark_x, 2.0);
-    double term3 = (observation_y - map_y) * (observation_y - map_y) / 2 * pow(std_landmark_y, 2.0);
+    double term2 = pow((observation_x - map_x), 2.0) / (2 * pow(std_landmark_x, 2.0));
+    double term3 = pow((observation_y - map_y), 2.0) / (2 * pow(std_landmark_y, 2.0));
     double exponent_value = exp(-(term2 + term3));
     result = term1 * exponent_value;
     return result;
