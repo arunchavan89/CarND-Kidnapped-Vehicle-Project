@@ -154,6 +154,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                     max_val = distance;
                 }
             }
+            /* Calculate muñltivariate Gaussian normal distribution https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
             prob *= calculate_multvariate_normal_distribution(std_landmark[0], std_landmark[1], trans_x, trans_y, land_x, land_y);
 
         }

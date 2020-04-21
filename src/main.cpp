@@ -93,19 +93,24 @@ int main() {
                         // receive noisy observation data from the simulator
                         // sense_observations in JSON format 
                         //   [{obs_x,obs_y},{obs_x,obs_y},...{obs_x,obs_y}] 
-                        
+                        vector<LandmarkObs> noisy_observations;
                         string sense_observations_x = j[1]["sense_observations_x"];
                         string sense_observations_y = j[1]["sense_observations_y"];
 
-                        std::istringstream iss_x(sense_observations_x);
                         vector<float> x_sense;
-                        std::copy(std::istream_iterator<float>(iss_x), std::istream_iterator<float>(), std::back_inserter(x_sense));
+                        std::istringstream iss_x(sense_observations_x);
 
-                        std::istringstream iss_y(sense_observations_y);
+                        std::copy(std::istream_iterator<float>(iss_x),
+                            std::istream_iterator<float>(),
+                            std::back_inserter(x_sense));
+
                         vector<float> y_sense;
-                        std::copy(std::istream_iterator<float>(iss_y), std::istream_iterator<float>(), std::back_inserter(y_sense));
+                        std::istringstream iss_y(sense_observations_y);
 
-                        vector<LandmarkObs> noisy_observations;
+                        std::copy(std::istream_iterator<float>(iss_y),
+                            std::istream_iterator<float>(),
+                            std::back_inserter(y_sense));
+
                         for (int i = 0; i < x_sense.size(); ++i)
                         {
                             LandmarkObs obs;
@@ -114,10 +119,8 @@ int main() {
                             noisy_observations.push_back(obs);
                         }
 
-                        // Update the weights 
+                        // Update the weights and resample
                         pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
-
-                        // Resample updated weights
                         pf.resample();
 
                         // Calculate and output the average weighted error of the particle 
@@ -177,7 +180,7 @@ int main() {
         });
 
     int port = 4567;
-    if (h.listen("127.0.0.1", port))
+    if (h.listen(port))
     {
         std::cout << "Listening to port " << port << std::endl;
     }
