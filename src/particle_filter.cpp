@@ -31,7 +31,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
      *
      */
 
-    num_particles = 10;  // Set the number of particles
+    num_particles = 20;  // Set the number of particles
 
     /* Add noise to each measurement */
     std::default_random_engine gen;
@@ -67,43 +67,32 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
      *  http://www.cplusplus.com/reference/random/default_random_engine/
      */
 
-    std::random_device rd{};
-    std::mt19937 gen{ rd() };
+    std::default_random_engine gen;
 
-    for (int i = 0; i < particles.size(); ++i)
+    for (int i = 0; i < num_particles; i++)
     {
         Particle particle = particles[i];
 
-        if (yaw_rate > 0.0001) /* Avoid division by zero. */
-        {
-            /* Update distances: https://github.com/arunchavan89/CarND-Kidnapped-Vehicle-Project/blob/master/formulae.pdf */
-            particle.x = particle.x + (velocity / yaw_rate)  * (sin(particle.theta + yaw_rate * delta_t) - sin(particle.theta));
-            particle.y = particle.y + (velocity / yaw_rate)  * (cos(particle.theta) - cos(particle.theta + yaw_rate * delta_t));
-
-            /* Update orientation */
-            particle.theta = particle.theta + yaw_rate * delta_t;
-        }
-        else
-        {
-            /* Update distances */
-            particle.x = particle.x + cos(yaw_rate) * (velocity * delta_t);
-            particle.y = particle.y + sin(yaw_rate) * (velocity * delta_t);
-
-            /* Update orientation */
+        //Instead of a hard check of 0, adding a check for very low value of yaw_rate
+        if (fabs(yaw_rate) < 0.0001) {
+            particle.x = particle.x + velocity * delta_t * cos(particle.theta);
+            particle.y = particle.y + velocity * delta_t * sin(particle.theta);
             particle.theta = particle.theta;
         }
+        else {
+            particle.x = particle.x + (velocity / yaw_rate) * (sin(particle.theta + (yaw_rate * delta_t)) - sin(particle.theta));
+            particle.y = particle.y + (velocity / yaw_rate) * (cos(particle.theta) - cos(particle.theta + (yaw_rate * delta_t)));
+            particle.theta = particle.theta + (yaw_rate * delta_t);
+        }
 
-        std::normal_distribution<double>x(particle.x, std_pos[0]);
-        std::normal_distribution<double>y(particle.y, std_pos[1]);
-        std::normal_distribution<double>theta(particle.theta, std_pos[2]);
+        std::normal_distribution<double> dist_x(particle.x, std_pos[0]);
+        std::normal_distribution<double> dist_y(particle.y, std_pos[1]);
+        std::normal_distribution<double> dist_theta(particle.theta, std_pos[2]);
 
-        particle.x = x(gen);
-        particle.y = y(gen);
-        particle.theta = theta(gen);
-
-        particles[i] = particle;
+        particles[i].x = dist_x(gen);
+        particles[i].y = dist_y(gen);
+        particles[i].theta = dist_theta(gen);
     }
-
 }
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, vector<LandmarkObs>& observations)
@@ -193,8 +182,7 @@ void ParticleFilter::resample()
      * NOTE: You may find std::discrete_distribution helpful here.
      *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
      */
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::default_random_engine gen;
     std::discrete_distribution<> d(weights.begin(), weights.end());
     std::vector<Particle> resampled_particles;
 
